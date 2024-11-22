@@ -9,14 +9,14 @@ using Google.Cloud.Firestore;
 
 public class FlowerShopBusiness
 {
-    private const string FIREBASE_PROJID = "flowerorderdatabase"; // Replace with your Firebase Project ID
+    private const string FIREBASE_PROJID = "flowerorderdatabase"; 
     private FirestoreDb db;
 
     public FlowerShopBusiness()
     {
         try
         {
-            InitFirestore(); // Initialize Firestore
+            InitFirestore(); 
         }
         catch (Exception ex)
         {
