@@ -1,0 +1,226 @@
+﻿@page "/new-order"
+@using FlowerShopLibrary
+@inject FlowerProductList ProductList
+@inject NavigationManager NavigationManager
+@using Google.Cloud.Firestore
+
+<style>
+      body {
+          font-family: "Hurricane", cursive;
+          font-weight: 400;
+          font-style: normal;
+          background-color: #ffffff;
+          margin: 0;
+          padding: 0;
+          background-image: url('https://img.freepik.com/free-vector/watercolor-floral-background-with-soft-colors_52683-28620.jpg'); /* Specify the image path here */
+          background-size: cover; /* Ensures the image covers the entire screen */
+          background-position: center center; /* Centers the image */
+          background-attachment: fixed; /* Ensures the background image doesn't scroll */
+      }
+
+  form {
+        background: #f8f7f6;
+        background-color: #f8f7f6;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        max-width: 450px;
+        margin: auto;
+        font-family: Arial, sans-serif;
+    }
+
+
+    h3 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 22px;
+    }
+
+    h4 {
+        margin-top: 20px;
+        margin-bottom: 10px;
+        font-size: 18px;
+        color: #555;
+    }
+
+
+   .form-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+        color: #333;
+    }
+
+    input[type="text"],
+    select {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+        background: #f9f9f9;
+    }
+
+        input[type="text"]:focus,
+        select:focus {
+            border-color: #007bff;
+            background: #ffffff;
+            outline: none;
+        }
+
+
+   .radio-option {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: #444;
+    }
+
+    button {
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #C4A484; 
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+        button:hover {
+            background-color: #b5651d;
+        }
+
+        button:focus {
+            outline: none;
+        }
+</style>
+
+
+<h3>Create a New Order</h3>
+
+<form>
+    <label>Name: <input @bind="customerName" /></label><br />
+    <label>Address: <input @bind="customerAddress" /></label><br />
+    <label>Phone: <input @bind="customerPhone" /></label><br />
+
+    <h4>Select Bouquet Size</h4>
+    @foreach (var sizeOption in Enum.GetValues(typeof(Size)).Cast<Size>())
+    {
+        <button type="button" @onclick="() => OnSizeChanged(sizeOption)">
+            @($"{sizeOption} ({(int)sizeOption} flowers)")
+        </button>
+        <br />
+    }
+
+    <h4>Select Flowers</h4>
+    @foreach (var flower in selectedFlowers)
+    {
+        <div>
+            <label>Flower ID:</label>
+            <input type="number" @bind="selectedFlowers[Array.IndexOf(selectedFlowers.ToArray(), flower)]" min="1" max="12" placeholder="Enter flower ID" />
+        </div>
+    }
+
+    <button type="button" @onclick="SubmitOrder">Submit Order</button>
+</form>
+
+@code {
+    FirestoreDb db = FirestoreDb.Create("flowerorderdatabase");
+
+    private string customerName = "";
+    private string customerAddress = "";
+    private string customerPhone = "";
+    private Size selectedSize = Size.Small;
+    private List<int> selectedFlowers = new List<int>(); // List to store selected flowers
+
+    // This method will run when the page is initialized
+    protected override void OnInitialized()
+    {
+        UpdateSelectedFlowers((int)selectedSize); // Initialize flower selections based on default size
+    }
+
+    // Adjusts flower selection list based on selected bouquet size
+    private void UpdateSelectedFlowers(int size)
+    {
+        // If the list is smaller than the size, add new elements (with a default value, e.g., 0)
+        while (selectedFlowers.Count < size)
+        {
+            selectedFlowers.Add(0); // Add placeholder values
+        }
+
+        // If the list is larger than the size, trim it
+        if (selectedFlowers.Count > size)
+        {
+            selectedFlowers = selectedFlowers.Take(size).ToList();
+        }
+    }
+
+    // This method is called when bouquet size is changed
+    private void OnSizeChanged(Size newSize)
+    {
+        selectedSize = newSize;
+        UpdateSelectedFlowers((int)newSize); // Adjust the flower selections list
+        StateHasChanged(); // Re-render the component
+    }
+
+    // Method to handle order submission
+    private async Task SubmitOrder()
+    {
+        // Validate customer info
+        if (string.IsNullOrWhiteSpace(customerName) || string.IsNullOrWhiteSpace(customerAddress) || string.IsNullOrWhiteSpace(customerPhone))
+        {
+            Console.WriteLine("Missing customer details.");
+            return;
+        }
+
+        // Validate flower selection
+        if (selectedFlowers.Any(f => f == 0))
+        {
+            Console.WriteLine("Incomplete flower selection.");
+            return;
+        }
+
+        // Create customer and order
+        var customer = new
+        {
+            Name = customerName,
+            Address = customerAddress,
+            TelephoneNumber = customerPhone
+        };
+
+        var arrangement = new
+        {
+            Size = selectedSize.ToString(),
+            Flowers = selectedFlowers.Select(id => ProductList.GetFlowerProduct(id)?.Name).ToList()
+        };
+
+        var order = new
+        {
+            Customer = customer,
+            Arrangements = new[] { arrangement },
+            Status = "Pending",
+            Date = DateTime.UtcNow.ToString("o")
+        };
+
+        // Save order to Firebase
+        try
+        {
+            CollectionReference ordersCollection = db.Collection("orders");
+            DocumentReference docRef = await ordersCollection.AddAsync(order);
+
+            Console.WriteLine($"Order saved successfully! Document ID: {docRef.Id}");
+            NavigationManager.NavigateTo("/orders"); // Navigate to the orders page
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving order: {ex.Message}");
+        }
+    }
+
+}

@@ -1,0 +1,124 @@
+﻿@page "/"
+@inject NavigationManager _navigation
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        
+         body{
+            background-image: url('https://img.freepik.com/free-vector/watercolor-floral-background-with-soft-colors_52683-28620.jpg');
+        }
+        .contain {
+            width: 90%;
+            max-width: 800px;
+            padding: 20px;
+            background-color: #d8cdc4;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            text-align: center;
+            align-items: center;
+            margin-left: 200px;
+        }
+
+        h1 {
+            font-size: 2em;
+            color: #4a4a4a;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .about-section {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #f9fafb;
+            border-radius: 8px;
+        }
+
+            .about-section h2 {
+                color: #4a4a4a;
+                font-size: 1.5em;
+            }
+
+        .steps {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+            .steps h2 {
+                font-size: 1.4em;
+                color: #333;
+                margin-bottom: 10px;
+            }
+
+            .steps ol {
+                padding-left: 20px;
+                line-height: 1.6;
+                color: #555;
+            }
+
+            .steps a {
+                color: #0073e6;
+                text-decoration: none;
+                font-weight: bold;
+            }
+
+                .steps a:hover {
+                    text-decoration: underline;
+                }
+
+        .note {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="contain">
+
+        <h1>Admin Dashboard</h1>
+        <p>Welcome to the admin panel. From here, you can manage order history and other administrative tasks effectively.</p>
+
+        <div class="about-section">
+            <h2>About Us</h2>
+            <p>Our team is committed to providing efficient and reliable management solutions. This admin panel is designed to streamline order management, allowing administrators to maintain accurate and up-to-date records effortlessly. Our shop is dedicated to providing beautiful, high-quality floral arrangements for every occasion. From delicate bouquets to vibrant centerpieces, our mission is to bring a touch of nature’s beauty into our customers’ lives.</p>
+        </div>
+
+        <div class="steps">
+            <h2>How to Manage Orders:</h2>
+            <ol>
+                <li>Go to the <a @onclick="() => ChangePage()">View Order</a> page to access order management tools.</li>
+                <li>
+                    On the Order History page, you will find these options:
+                    <ul>
+                        <li><strong>Edit</strong> - Update details of an existing order.</li>
+                        <li><strong>Delete</strong> - Remove orders that are no longer needed.</li>
+                        <li><strong>Add</strong> - Enter new orders as required.</li>
+                    </ul>
+                </li>
+                <li>Click on the appropriate button to execute the action.</li>
+                <li>Return to this dashboard anytime to access more admin features.</li>
+            </ol>
+            <p>Always double-check the order details before confirming any changes.</p>
+        </div>
+
+        <div class="note">
+            <p>Need assistance? Contact the support team at <a href="mailto:support@adminpanel.com">support@adminpanel.com</a>.</p>
+        </div>
+    </div>
+</body>
+</html>
+
+@code{
+    private async void ChangePage()
+    {
+        _navigation.NavigateTo("/orders");
+    }
+}

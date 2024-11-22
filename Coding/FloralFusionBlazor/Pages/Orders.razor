@@ -1,0 +1,60 @@
+﻿@page "/orders"
+@using FlowerShopLibrary
+@inject FlowerShopBusiness FlowerShopBusiness
+
+<h3>Orders</h3>
+
+<style>
+    body {
+        background-image: url('https://img.freepik.com/free-vector/watercolor-floral-background-with-soft-colors_52683-28620.jpg');
+    }
+
+    hr {
+        border-bottom: 5px solid rgba(0, 0, 0, 0.1);
+    }
+</style>
+
+@if (orders == null || orders.Count == 0)
+{
+    <p>No orders available.</p>
+}
+else
+{
+    <ul>
+        @foreach (var order in orders)
+        {
+            <li>
+                <strong>Generated ID:</strong> @order.GeneratedID <br />
+                <strong>Customer Name:</strong> @order.Customer.Name <br />
+                <strong>Address:</strong> @order.Customer.Address <br />
+                <strong>Phone:</strong> @order.Customer.TelephoneNumber <br />
+                <strong>Bouquet Size:</strong> @order.Arrangements[0].Size <br />
+                <strong>Flowers:</strong>
+                <ul>
+                    @foreach (var flower in order.Arrangements[0].Flowers)
+                    {
+                        <li>@flower.Name - RM @flower.Price</li>
+                    }
+                </ul>
+                <strong>Total Price:</strong> RM @order.TotalPrice <br />
+                <button @onclick="@(() => DeleteOrder(order.GeneratedID))">Delete</button>
+                <hr />
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<Order> orders;
+
+    protected override async Task OnInitializedAsync()
+    {
+        orders = await FlowerShopBusiness.GetAllOrders();
+    }
+
+    private async Task DeleteOrder(string generatedId)
+    {
+        await FlowerShopBusiness.DeleteOrder(generatedId);
+        orders = await FlowerShopBusiness.GetAllOrders(); // Refresh list
+    }
+}

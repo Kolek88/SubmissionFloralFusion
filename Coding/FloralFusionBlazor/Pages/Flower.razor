@@ -1,0 +1,122 @@
+﻿@page "/flowers"
+@using FlowerShopLibrary
+
+@inject FlowerProductList ProductList
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floral Fusion</title>
+    <!--External font-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hurricane&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="flower.css">
+</head>
+<body>
+    <section class="floral-section">
+        <h1 class="title">Floral Fusion</h1>
+        <div class="flower-grid">
+            <div class="flower-item">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQOIF0NHwT5ZlpSvUzuigSQnakW7Yq4Jupkhw&s" alt="Lavender">
+                <p>LAVENDER</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/564x/6e/89/68/6e896888c54b18b943e4dcc9c6a3b3db.jpg" alt="Sunflower">
+                <p>SUNFLOWER</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/80/1b/c2/801bc299a73532d63ad171d7b41315a5.jpg" alt="Rose">
+                <p>ROSE</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/474x/11/b0/18/11b0182de145fa454c56182e49335fbb.jpg" alt="Daisy">
+                <p>DAISY</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/dc/13/fd/dc13fd10869a61665da8d3e37ac6d624.jpg" alt="Marigold">
+                <p>MARIGOLD</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/7d/8d/05/7d8d051a0d1fce1c6c75aa731a424f1c.jpg" alt="Dahlia">
+                <p>DAHLIA</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/564x/bb/04/55/bb0455bf71e8e9bec562aa1b54d16eca.jpg" alt="Gardenia">
+                <p>GARDENIA</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/63/86/75/63867508415805520ec1cf8cc145dfb2.jpg" alt="Lilac">
+                <p>LILAC</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/a9/ce/1b/a9ce1bbb6c81190412e76d9eea5c74a7.jpg" alt="Hydrangea">
+                <p>HYDRANGEA</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS4ZWi5VqIwBmlv9PDrMD3TL-YEec8W1Hes3Q&s" alt="Orchid">
+                <p>ORCHID</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/07/12/de/0712de7f5377ef17f07bcee07c5609e4.jpg" alt="tulips">
+                <p>TULIPS</p>
+            </div>
+            <div class="flower-item">
+                <img src="https://i.pinimg.com/736x/52/53/bf/5253bf6cdd0ccae7b69aa34f7ef769c2.jpg" alt="Azalea">
+                <p>AZALEA</p>
+            </div>
+        </div>
+    </section>
+    <style>
+        body {
+            font-family: "Open Sans", sans-serif;
+            color: #986c4a;
+            font-weight: bold;
+            margin: 0;
+            padding: 0;
+            background-image: url('https://img.freepik.com/free-vector/watercolor-floral-background-with-soft-colors_52683-28620.jpg');
+        }
+
+        .floral-section {
+            text-align: center;
+            margin: 50px auto;
+        }
+
+        .title {
+            font-size: 80px;
+            width: 100%;
+            color: black;
+            background-color: #ffffff;
+            margin-bottom: 10px;
+            font-family: "Hurricane", cursive;
+            font-weight: 400;
+            font-style: normal;
+        }
+
+        .flower-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr); /* Adjust columns as needed */
+            grid-gap: 20px;
+        }
+
+        .flower-item {
+            text-align: center;
+        }
+
+            .flower-item img {
+                width: 100%;
+                height: 500px;
+                object-fit: cover;
+                border-radius: 10px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            .flower-item p {
+                margin-top: 10px;
+            }
+    </style>
+</body>
+</html>
