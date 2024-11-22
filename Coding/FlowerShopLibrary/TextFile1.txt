@@ -1,0 +1,948 @@
+﻿using System;
+using System.Threading.Tasks;
+using StringLibrary; 
+
+class Program
+{
+	static async Task Main(string[] args)
+	{
+		FlowerProductList productList = new FlowerProductList();
+		CustomerList customerList = new CustomerList();
+		OrderList orderList = new OrderList();
+
+		FlowerShopBusiness flowerShopBusiness = new FlowerShopBusiness();
+		flowerShopBusiness.initFirestore(); // Initialize Firestore
+
+        Console.WriteLine("Loading data from Firebase...");
+        await flowerShopBusiness.LoadData(orderList, customerList);
+
+        while (true)
+		{
+			Console.WriteLine("\nWelcome to the Flower Customization System!");
+			Console.WriteLine("1. Create a new order");
+			Console.WriteLine("2. View pending orders");
+			Console.WriteLine("3. Exit");
+			Console.Write("Please select an option: ");
+
+			string choice = Console.ReadLine();
+
+			switch (choice)
+			{
+				case "1":
+					await CreateNewOrder(productList, customerList, orderList, flowerShopBusiness); // Store order in Firebase
+					break;
+				case "2":
+					ViewPendingOrders(orderList); // View orders locally
+					break;
+				case "3":
+					return;
+				default:
+					Console.WriteLine("Invalid option. Please try again.");
+					break;
+			}
+		}
+	}
+
+	static async Task CreateNewOrder(FlowerProductList productList, CustomerList customerList, OrderList orderList, FlowerShopBusiness flowerShopBusiness)
+	{
+		// Get customer details
+		Console.WriteLine("\nEnter customer details:");
+		Console.Write("Name: ");
+		string name = Console.ReadLine();
+		Console.Write("Address: ");
+		string address = Console.ReadLine();
+		Console.Write("Telephone number: ");
+		string telephoneNumber = Console.ReadLine();
+
+		int customerID = customerList.GetCustomerCount() + 1;
+		Customer customer = new Customer(customerID, name, address, telephoneNumber);
+		customerList.AddCustomer(customer);
+
+		// Create order
+		int orderID = orderList.GetOrderCount() + 1;
+		Order order = new Order(customer, orderID);
+
+		// Choose bouquet size
+		Console.WriteLine("\nChoose bouquet size:");
+		Console.WriteLine("1. Small (3 flowers)");
+		Console.WriteLine("2. Medium (5 flowers)");
+		Console.WriteLine("3. Large (10 flowers)");
+		Console.Write("Enter your choice (1-3): ");
+		int sizeChoice = int.Parse(Console.ReadLine());
+
+		StringLibrary.Size size;
+
+		if (sizeChoice == 1)
+		{
+			size = StringLibrary.Size.Small; 
+		}
+		else if (sizeChoice == 2)
+		{
+			size = StringLibrary.Size.Medium; 
+		}
+		else if (sizeChoice == 3)
+		{
+			size = StringLibrary.Size.Large; 
+		}
+		else
+		{
+			Console.WriteLine("Invalid choice. Defaulting to Small size.");
+			size = StringLibrary.Size.Small; 
+		}
+
+
+		FlowerArrangement arrangement = new FlowerArrangement(size);
+
+		// Pick flowers
+		Console.WriteLine("\nAvailable flowers:");
+		foreach (var flower in productList.AvailableFlowers)
+		{
+			Console.WriteLine($"{flower.ProductID}. {flower.Name} - {flower.GetFormattedPrice()}");
+		}
+
+		for (int i = 0; i < (int)size; i++)
+		{
+			Console.Write($"Choose flower {i + 1} (enter product ID): ");
+			int flowerChoice = int.Parse(Console.ReadLine());
+			FlowerProduct chosenFlower = productList.GetFlowerProduct(flowerChoice);
+			arrangement.AddFlower(chosenFlower);
+		}
+
+		order.AddArrangement(arrangement);
+
+		// Add personalized message
+		Console.Write("\nEnter a personalized message for the bouquet: ");
+		string message = Console.ReadLine();
+		order.AddPersonalizedMessage(message);
+
+		// Add order to the list
+		orderList.AddOrder(order);
+
+		// Save order to Firebase
+		await flowerShopBusiness.SaveOrder(order);
+
+		Console.WriteLine($"\nOrder created successfully. Order ID: {order.OrderID}");
+		Console.WriteLine($"Total: RM{order.CalculateTotal():F2}");
+	}
+
+	static void ViewPendingOrders(OrderList orderList)
+	{
+		List<Order> pendingOrders = orderList.GetOrdersByStatus(OrderStatus.Pending);
+		Console.WriteLine($"\nPending Orders: {pendingOrders.Count}");
+		foreach (var order in pendingOrders)
+		{
+			Console.WriteLine($"Order ID: {order.OrderID}, Customer: {order.Customer.Name}, Address: {order.Customer.Address}, Telephone: {order.Customer.TelephoneNumber}, Total: RM{order.CalculateTotal():F2}");
+		}
+	}
+}
+
+
+
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
+using Google.Cloud.Firestore;
+using StringLibrary;
+
+// Homework 3
+
+public class FlowerShopBusiness
+{
+	private OrderList OrderList { get; set; }
+	private CustomerList CustomerList { get; set; }
+	private FlowerProductList ProductList { get; set; }
+	private const string FIREBASE_PROJID = "flowerorderdatabase"; // ID firebase floral fusion
+	private FirestoreDb db;
+
+	public FlowerShopBusiness()
+	{
+		OrderList = new OrderList();
+		CustomerList = new CustomerList();
+		ProductList = new FlowerProductList();
+	}
+
+	public void initFirestore()
+	{
+		FirebaseApp.Create();
+		db = FirestoreDb.Create(FIREBASE_PROJID);
+		Console.WriteLine("Created Cloud Firestore client with project ID: {0}", FIREBASE_PROJID);
+	}
+
+	public async Task SaveOrder(Order order)
+	{
+		CollectionReference collectionRef = db.Collection("orders");
+		DocumentReference docRef = collectionRef.Document(order.OrderID.ToString());
+
+		var arrangements = new List<Dictionary<string, object>>();
+		foreach (var arrangement in order.Arrangements)
+		{
+			var flowers = new List<Dictionary<string, object>>();
+			foreach (var flower in arrangement.Flowers)
+			{
+				flowers.Add(new Dictionary<string, object>
+				{
+					{ "ProductID", flower.ProductID },
+					{ "Name", flower.Name },
+					{ "Price", Convert.ToDouble(flower.Price) }
+				}
+				);
+			}
+
+			arrangements.Add(new Dictionary<string, object>
+			{
+				{ "Size", arrangement.Size.ToString() },
+				{ "Flowers", flowers }
+			});
+		}
+
+		Dictionary<string, object> values = new Dictionary<string, object>
+		{
+			{ "OrderID", order.OrderID },
+			{ "Customer", new Dictionary<string, object>
+				{
+					{ "CustomerID", order.Customer.CustomerID },
+					{ "Name", order.Customer.Name },
+					{ "Address", order.Customer.Address },
+					{ "TelephoneNumber", order.Customer.TelephoneNumber }
+				}
+			},
+			{ "Arrangements", arrangements },
+			{ "Status", order.Status.ToString() },
+			{ "PersonalizedMessage", order.PersonalizedMessage?.Content },
+			{ "Total",  Convert.ToDouble(order.CalculateTotal()) }
+		};
+
+		await docRef.SetAsync(values);
+	}
+
+	public async Task<Order> GetOrder(int orderId)
+	{
+		DocumentReference docRef = db.Collection("orders").Document(orderId.ToString());
+		DocumentSnapshot snapshot = await docRef.GetSnapshotAsync();
+
+		if (!snapshot.Exists)
+			return null;
+
+		Dictionary<string, object> data = snapshot.ToDictionary();
+
+		// Create customer
+		var customerData = (Dictionary<string, object>)data["Customer"];
+		Customer customer = new Customer(
+			int.Parse(customerData["CustomerID"].ToString()),
+			customerData["Name"].ToString(),
+			customerData["Address"].ToString(),
+			customerData["TelephoneNumber"].ToString()
+		);
+
+		// Create order
+		Order order = new Order(customer, int.Parse(data["OrderID"].ToString()));
+
+		// Add arrangements
+		var arrangements = (List<object>)data["Arrangements"];
+		foreach (Dictionary<string, object> arrangementData in arrangements)
+		{
+			Size size = (Size)Enum.Parse(typeof(Size), arrangementData["Size"].ToString());
+			FlowerArrangement arrangement = new FlowerArrangement(size);
+
+			var flowers = (List<object>)arrangementData["Flowers"];
+			foreach (Dictionary<string, object> flowerData in flowers)
+			{
+				FlowerProduct flower = new FlowerProduct(
+					flowerData["Name"].ToString(),
+					decimal.Parse(flowerData["Price"].ToString()),
+					int.Parse(flowerData["ProductID"].ToString())
+				);
+				arrangement.AddFlower(flower);
+			}
+
+			order.AddArrangement(arrangement);
+		}
+
+		// Set status
+		order.UpdateStatus((OrderStatus)Enum.Parse(typeof(OrderStatus), data["Status"].ToString()));
+
+		// Add message if exists
+		if (data.ContainsKey("PersonalizedMessage") && data["PersonalizedMessage"] != null)
+		{
+			order.AddPersonalizedMessage(data["PersonalizedMessage"].ToString());
+		}
+
+		return order;
+	}
+
+	public async Task DeleteOrder(int orderId)
+	{
+		DocumentReference docRef = db.Collection("orders").Document(orderId.ToString());
+		await docRef.DeleteAsync();
+	}
+
+	public async Task<List<Order>> GetAllOrders()
+	{
+		Query ordersQuery = db.Collection("orders");
+		QuerySnapshot querySnapshot = await ordersQuery.GetSnapshotAsync();
+
+		List<Order> orders = new List<Order>();
+		foreach (DocumentSnapshot documentSnapshot in querySnapshot.Documents)
+		{
+			int orderId = int.Parse(documentSnapshot.Id);
+			Order order = await GetOrder(orderId);
+			if (order != null)
+			{
+				orders.Add(order);
+			}
+		}
+
+		return orders;
+	}
+
+	public async Task<List<Order>> GetOrdersByStatus(OrderStatus status)
+	{
+		Query ordersQuery = db.Collection("orders").WhereEqualTo("Status", status.ToString());
+		QuerySnapshot querySnapshot = await ordersQuery.GetSnapshotAsync();
+
+		List<Order> orders = new List<Order>();
+		foreach (DocumentSnapshot documentSnapshot in querySnapshot.Documents)
+		{
+			int orderId = int.Parse(documentSnapshot.Id);
+			Order order = await GetOrder(orderId);
+			if (order != null)
+			{
+				orders.Add(order);
+			}
+		}
+
+		return orders;
+	}
+
+	public async Task LoadData(OrderList orderList, CustomerList customerList)
+	{
+		try
+		{
+			// Fetch all orders from Firebase
+			List<Order> existingOrders = await GetAllOrders();
+
+			// Add orders and customers to their respective lists
+			foreach (var order in existingOrders)
+			{
+				orderList.AddOrder(order);
+
+				// Add customer to the local customer list if not already present
+				if (customerList.GetCustomer(order.Customer.CustomerID) == null)
+				{
+					customerList.AddCustomer(order.Customer);
+				}
+			}
+
+			Console.WriteLine("Orders and customers loaded successfully from Firebase.");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine($"Failed to load data: {ex.Message}");
+		}
+	}
+
+}
+
+namespace StringLibrary
+{
+    public class Customer
+    {
+        public int CustomerID { get; set; }
+        public string Name { get; set; }
+        public string Address { get; set; }
+        public string TelephoneNumber { get; set; }
+
+        public Customer(int customerID, string name, string address, string telephoneNumber)
+        {
+            CustomerID = customerID;
+            Name = name;
+            Address = address;
+            TelephoneNumber = telephoneNumber;
+        }
+    }
+}
+namespace StringLibrary
+{
+    public class CustomerList
+    {
+        private List<Customer> Customers { get; set; }
+
+        public CustomerList()
+        {
+            Customers = new List<Customer>();
+        }
+
+        public void AddCustomer(Customer customer)
+        {
+            Customers.Add(customer);
+        }
+
+        public Customer GetCustomer(int customerID)
+        {
+            return Customers.Find(c => c.CustomerID == customerID);
+        }
+
+        public int GetCustomerCount()
+        {
+            return Customers.Count;
+        }
+    }
+}
+
+namespace StringLibrary
+{
+    public class FlowerArrangement
+    {
+        public Size Size { get; set; }
+        public List<FlowerProduct> Flowers { get; set; }
+
+        public FlowerArrangement(Size size)
+        {
+            Size = size;
+            Flowers = new List<FlowerProduct>();
+        }
+
+        public void AddFlower(FlowerProduct flower)
+        {
+            if (Flowers.Count < (int)Size)
+            {
+                Flowers.Add(flower);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Cannot add more flowers. Maximum capacity ({(int)Size}) reached.");
+            }
+        }
+
+        public decimal CalculateTotal()
+        {
+            decimal total = 0;
+            foreach (var flower in Flowers)
+            {
+                total += flower.Price;
+            }
+            return total;
+        }
+    }
+}
+namespace StringLibrary
+{
+    public class FlowerProduct
+    {
+        public string Name { get; set; }
+        public decimal Price { get; set; }
+        public int ProductID { get; set; }
+
+        public FlowerProduct(string name, decimal price, int productID)
+        {
+            Name = name;
+            Price = price;
+            ProductID = productID;
+        }
+
+        public string GetFormattedPrice()
+        {
+            return $"RM{Price:F2}";
+        }
+    }
+}
+namespace StringLibrary
+{
+    public class FlowerProductList
+    {
+        public List<FlowerProduct> AvailableFlowers { get; private set; }
+
+        public FlowerProductList()
+        {
+            AvailableFlowers = new List<FlowerProduct>
+        {
+            new FlowerProduct("Rose", 5.99m, 1),
+            new FlowerProduct("Tulip", 4.99m, 2),
+            new FlowerProduct("Sunflower", 3.99m, 3),
+            new FlowerProduct("Lily", 6.99m, 4),
+            new FlowerProduct("Daisy", 3.49m, 5),
+            new FlowerProduct("Orchid", 8.99m, 6),
+            new FlowerProduct("Carnation", 4.49m, 7),
+            new FlowerProduct("Peony", 7.99m, 8),
+            new FlowerProduct("Hydrangea", 6.49m, 9),
+            new FlowerProduct("Chrysanthemum", 4.99m, 10),
+            new FlowerProduct("Gerbera", 5.49m, 11),
+            new FlowerProduct("Lavender", 3.99m, 12)
+        };
+        }
+
+        public FlowerProduct GetFlowerProduct(int productID)
+        {
+            return AvailableFlowers.Find(p => p.ProductID == productID);
+        }
+    }
+}
+namespace StringLibrary
+{
+    public class Message
+    {
+        public string Content { get; set; }
+
+        public Message(string content)
+        {
+            Content = content;
+        }
+    }
+}
+namespace StringLibrary
+{
+    public class Order
+    {
+        public Customer Customer { get; set; }
+        public List<FlowerArrangement> Arrangements { get; set; }
+        public int OrderID { get; set; }
+        public Message PersonalizedMessage { get; set; }
+        public OrderStatus Status { get; set; }
+
+        public Order(Customer customer, int orderID)
+        {
+            Customer = customer;
+            OrderID = orderID;
+            Arrangements = new List<FlowerArrangement>();
+            Status = OrderStatus.Pending; // Default status
+        }
+
+        public void AddArrangement(FlowerArrangement arrangement)
+        {
+            Arrangements.Add(arrangement);
+        }
+
+        public void AddPersonalizedMessage(string messageContent)
+        {
+            PersonalizedMessage = new Message(messageContent);
+        }
+
+        public decimal CalculateTotal()
+        {
+            decimal total = 0;
+            foreach (var arrangement in Arrangements)
+            {
+                total += arrangement.CalculateTotal();
+            }
+            return total;
+        }
+
+        public void UpdateStatus(OrderStatus newStatus) // not in program yet
+        {
+            Status = newStatus;
+        }
+    }
+}
+
+  namespace StringLibrary
+    {
+        public class OrderService
+        {
+            public List<Order> Orders { get; private set; } = new List<Order>();
+
+            public void AddOrder(Order order)
+            {
+                Orders.Add(order);
+            }
+
+            public List<Order> GetAllOrders()
+            {
+                return Orders;
+            }
+        }
+    }
+
+namespace StringLibrary
+{
+    public class OrderList
+    {
+        private List<Order> Orders { get; set; }
+
+        public OrderList()
+        {
+            Orders = new List<Order>();
+        }
+
+        public void AddOrder(Order order)
+        {
+            Orders.Add(order);
+        }
+
+        public Order GetOrder(int orderID)
+        {
+            return Orders.Find(o => o.OrderID == orderID);
+        }
+
+        public List<Order> GetOrdersByStatus(OrderStatus status)
+        {
+            return Orders.FindAll(o => o.Status == status);
+        }
+
+        public void UpdateOrderStatus(int orderID, OrderStatus newStatus)
+        {
+            Order order = GetOrder(orderID);
+            if (order != null)
+            {
+                order.UpdateStatus(newStatus);
+            }
+        }
+
+        public int GetOrderCount()
+        {
+            return Orders.Count;
+        }
+    }
+}
+namespace StringLibrary
+{
+    public enum OrderStatus
+    {
+        Pending,
+        Ongoing,
+        Complete
+    }
+}
+namespace StringLibrary
+{
+    public enum Size
+    {
+        Small = 3,
+        Medium = 5,
+        Large = 10
+    }
+}
+***
+
+Pages Folder
+***
+Order.razor
+@page "/orders"
+@using FlowerShopLibrary
+
+@inject OrderService OrderService
+@inject OrderList OrderList
+
+<h3>Orders</h3>
+
+@if (OrderService.GetAllOrders().Count == 0)
+{
+    <p>No orders available.</p>
+}
+else
+{
+    <ul>
+        @foreach (var order in OrderService.GetAllOrders())
+        {
+            <li>
+                <strong>Order ID:</strong> @order.OrderID <br />
+                <strong>Customer Name:</strong> @order.Customer.Name <br />
+                <strong>Address:</strong> @order.Customer.Address <br />
+                <strong>Phone:</strong> @order.Customer.TelephoneNumber <br />
+                <strong>Bouquet Size:</strong> @order.Arrangements[0].Size <br />
+                <strong>Flowers:</strong>
+                <ul>
+                    @foreach (var flower in order.Arrangements[0].Flowers)
+                    {
+                        <li>@flower.Name</li>
+                    }
+                </ul>
+                <hr />
+            </li>
+        }
+    </ul>
+}
+
+<ul>
+    @foreach (var order in OrderList.GetOrdersByStatus(OrderStatus.Pending))
+    {
+        <li>
+            Order ID: @order.OrderID - Total: @order.CalculateTotal():F2
+        </li>
+    }
+</ul>
+***
+NewOrder.razor
+@page "/new-order"
+@using FlowerShopLibrary
+@inject FlowerProductList ProductList
+@inject OrderList OrderList
+@inject NavigationManager NavigationManager
+@inject OrderService OrderService
+
+
+
+<h3>Create a New Order</h3>
+
+
+<form>
+    <label>Name: <input @bind="customerName" /></label><br />
+    <label>Address: <input @bind="customerAddress" /></label><br />
+    <label>Phone: <input @bind="customerPhone" /></label><br />
+
+    <h4>Select Bouquet Size</h4>
+    @foreach (var sizeOption in Enum.GetValues(typeof(Size)).Cast<Size>())
+    {
+        <label>
+            <input type="radio"
+                   name="bouquetSize"
+                   @onchange="() => OnSizeChanged(sizeOption)"
+                   checked="@(selectedSize == sizeOption)" />
+            @($"{sizeOption} ({(int)sizeOption} flowers)")
+        </label>
+        <br />
+    }
+
+    <h4>Select Flowers</h4>
+    @for (int i = 0; i < selectedFlowers.Count; i++)
+    {
+        <select @onchange="(e) => OnFlowerChanged(i, e.Value?.ToString())">
+            <option value="0">-- Select Flower --</option>
+            @foreach (var flower in ProductList.AvailableFlowers)
+            {
+                <option value="@flower.ProductID" selected="@(selectedFlowers[i] == flower.ProductID)">
+                    @flower.Name
+                </option>
+            }
+        </select>
+        <br />
+    }
+
+    <button type="button" @onclick="SubmitOrder">Submit Order</button>
+    
+</form>
+
+@code {
+    private string customerName;
+    private string customerAddress;
+    private string customerPhone;
+    private Size selectedSize = Size.Small;
+    private List<int> selectedFlowers = new List<int>();
+
+    protected override void OnInitialized()
+    {
+        UpdateSelectedFlowers((int)selectedSize);
+    }
+
+    private void UpdateSelectedFlowers(int size)
+    {
+        if (size < selectedFlowers.Count)
+        {
+            // Trim the list
+            selectedFlowers = selectedFlowers.Take(size).ToList();
+        }
+        else if (size > selectedFlowers.Count)
+        {
+            // Expand the list with default values
+            selectedFlowers.AddRange(Enumerable.Repeat(0, size - selectedFlowers.Count));
+        }
+    }
+
+
+    private void OnSizeChanged(Size newSize)
+    {
+        selectedSize = newSize;
+        UpdateSelectedFlowers((int)newSize);
+        StateHasChanged(); // Re-render UI with updated list
+    }
+
+
+    private void SubmitOrder()
+    {
+        if (string.IsNullOrWhiteSpace(customerName))
+        {
+            Console.WriteLine("[SubmitOrder] Customer name is missing.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(customerAddress))
+        {
+            Console.WriteLine("[SubmitOrder] Customer address is missing.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(customerPhone))
+        {
+            Console.WriteLine("[SubmitOrder] Customer phone is missing.");
+            return;
+        }
+
+        if (selectedFlowers.All(f => f == 0))
+        {
+            Console.WriteLine("[SubmitOrder] No flowers selected.");
+            return;
+        }
+
+        Console.WriteLine("[SubmitOrder] Validation passed. Proceeding to save order...");
+
+        // Create customer
+        var customer = new Customer(
+            OrderService.GetAllOrders().Count + 1,
+            customerName,
+            customerAddress,
+            customerPhone
+        );
+
+        // Create flower arrangement
+        var arrangement = new FlowerArrangement(selectedSize);
+
+        foreach (var flowerId in selectedFlowers)
+        {
+            if (flowerId == 0) continue;
+            var flower = ProductList.GetFlowerProduct(flowerId);
+            arrangement.AddFlower(flower);
+        }
+
+        // Create and save order
+        var order = new Order(customer, OrderService.GetAllOrders().Count + 1);
+        order.AddArrangement(arrangement);
+
+        OrderService.AddOrder(order);
+        Console.WriteLine($"[SubmitOrder] Order saved successfully. Total orders: {OrderService.GetAllOrders().Count}");
+
+        // Navigate to orders page
+        NavigationManager.NavigateTo("/orders");
+    }
+
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (selectedFlowers.Count != (int)selectedSize)
+        {
+            Console.WriteLine($"[OnAfterRender] Resynchronizing selectedFlowers. Current count: {selectedFlowers.Count}, Expected count: {(int)selectedSize}");
+            UpdateSelectedFlowers((int)selectedSize);
+            StateHasChanged(); // Trigger a re-render after fixing the state
+        }
+    }
+
+    private void OnFlowerChanged(int index, string selectedValue)
+    {
+        if (index >= 0 && index < selectedFlowers.Count)
+        {
+            Console.WriteLine($"[OnFlowerChanged] Changing flower at index {index} to {selectedValue}");
+            selectedFlowers[index] = int.TryParse(selectedValue, out var value) ? value : 0;
+        }
+        else
+        {
+            Console.WriteLine($"[OnFlowerChanged] Index out of range: {index}");
+        }
+    }
+
+}
+***
+Shared folder
+
+NavMenu.razor
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">HarapanFF</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="oi oi-home" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="counter">
+                <span class="oi oi-plus" aria-hidden="true"></span> Counter
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="fetchdata">
+                <span class="oi oi-list-rich" aria-hidden="true"></span> Fetch data
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink href="/flowers" class="nav-link" Match="NavLinkMatch.All">
+                Flowers
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink href="/orders" class="nav-link" Match="NavLinkMatch.All">
+                Orders
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink href="/new-order" class="nav-link" Match="NavLinkMatch.All">
+                New Orders
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+}
+***
+MainLayout.razor
+@inherits LayoutComponentBase
+
+<PageTitle>HarapanFF</PageTitle>
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <a href="https://docs.microsoft.com/aspnet/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+***
+Program.cs
+using FlowerShopLibrary;
+using HarapanFF.Data;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddRazorPages();
+builder.Services.AddServerSideBlazor();
+builder.Services.AddSingleton<WeatherForecastService>();
+builder.Services.AddSingleton<FlowerProductList>();
+builder.Services.AddSingleton<OrderList>();
+builder.Services.AddSingleton<OrderService>();
+
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.MapBlazorHub();
+app.MapFallbackToPage("/_Host");
+
+app.Run();
